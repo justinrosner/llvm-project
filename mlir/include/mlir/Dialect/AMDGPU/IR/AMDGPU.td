@@ -959,6 +959,15 @@ def MFMAOutTypes : AnyTypeOf<[F64,
 def ScaledMFMAInTypes : AnyTypeOf<[VectorOfLengthAndType<[32], [F8E5M2, F8E4M3FN]>,
                                    VectorOfLengthAndType<[32], [F6E2M3FN, F6E3M2FN, F4E2M1FN]>]>;
 def ScaledMFMAOutTypes : AnyTypeOf<[VectorOfLengthAndType<[4, 16], [F32]>]>;
+
+// scaled_wmma
+def ScaledWMMAInTypes
+    : AnyTypeOf<[VectorOfLengthAndType<[64], [F8E5M2, F8E4M3FN]>,
+                 VectorOfLengthAndType<[64], [F6E2M3FN, F6E3M2FN]>,
+                 VectorOfLengthAndType<[64, 128], [F4E2M1FN]>]>;
+
+def ScaledWMMAOutTypes : AnyTypeOf<[VectorOfLengthAndType<[8, 16], [F32]>]>;
+
 // wmma
 def WMMAInTypes : AnyTypeOf<[VectorOfLengthAndType<[2], [F32]>,
                              VectorOfLengthAndType<[4, 8, 16], [F16, BF16]>,
@@ -1224,6 +1233,72 @@ def AMDGPU_ScaledMFMAOp :
     `:` type($scalesA) `,` type($sourceA) `,` type($scalesB) `,` type($sourceB) `,` type($destC)
   }];
   let hasCanonicalizer = 1;
+}
+
+def AMDGPU_ScaledWMMAOp
+    : AMDGPU_Op<"scaled_wmma", [AllTypesMatch<["destC", "destD"]>, Pure]>,
+      Arguments<(ins ConfinedAttr<I32Attr, [IntIsOneOf<[16, 32]>]>:$m,
+          ConfinedAttr<I32Attr, [IntIsOneOf<[16]>]>:$n,
+          ConfinedAttr<I32Attr, [IntIsOneOf<[128]>]>:$k,
+          ScaledWMMAInTypes:$sourceA, ScaledWMMAInTypes:$sourceB,
+          ScaledWMMAOutTypes:$destC,
+          VectorOfLengthAndType<[4, 8], [F8E8M0FNU, F8E4M3FN]>:$scaleA,
+          ConfinedAttr<I32Attr, [IntIsOneOf<[0, 1]>]>:$a_first_scale_lane,
+          VectorOfLengthAndType<[4, 8], [F8E8M0FNU, F8E4M3FN]>:$scaleB,
+          ConfinedAttr<I32Attr, [IntIsOneOf<[0, 1]>]>:$b_first_scale_lane)>,
+      Results<(outs ScaledWMMAOutTypes:$destD)> {
+  // TODO: E5M3FNU scales are supported, but there is not yet MLIR support for
+  // this datatype. Once we have support for that, update the scaleA and scaleB
+  // types here.
+  let summary = "MLIR wrapper for scaled wmma instructions";
+  let description = [{
+    The `amdgpu.scaled_wmma` op is an MLIR wrapper around intrinsics for scaled
+    `wmma` instructions. These instructions perform matrix multiplication with
+    per-block scaling of inputs, supporting fp4, fp6, and fp8 data formats.
+
+    The scale instructions support a block size of 16 or 32 and two tile sizes:
+    - 16x16x128 with mixed f8/f6/f4 formats (output: vector<4xf32>)
+    - 32x16x128 with f4 format only (output: vector<8xf32>)
+
+    Scale parameters (`scaleA`, `scaleB`) are small vectors of f8 scale values
+    (either f8E8M0FNU, or f8E4M3FN) that are packed into i32/i64 values during
+    lowering. The index attributes (`a_first_scale_lane`, `b_first_scale_lane`) select which register
+    lanes provide scale values:
+    - Block size 32: For tile size 16x16x128, each matrix gets 64 scales stored in half
+      a VGPR, with `a_first_scale_lane`/`b_first_scale_lane` selecting lanes 0-15 (index=0) or
+      16-31 (index=1). For a tile size of 32x16x128, matrix A gets 128 scales in
+      a full VGPR (`a_first_scale_lane` is unused), while matrix B gets 64 scales in
+      half a VGPR.
+
+    - Block size 16: For a tile size of 16x16x128, each matrix gets
+      128 scales stored in half of two VGPRs, with `a_first_scale_lane`/`b_first_scale_lane`
+      selecting lanes 0-15 (index=0) or 16-31 (index=1) for each of the VGPRs.
+      For 32x16x128, matrix A gets 256 scales in two VGPRs (`a_first_scale_lane` is unused),
+      while matrix B gets 128 scales stored in half of two VGPRs.
+
+    Example:
+    ```mlir
+      // 16x16x128: fp8 inputs
+      %0 = amdgpu.scaled_wmma 16x16x128 (%scaleVecA * %matA) * (%scaleVecB * %matB) + %matC
+        {a_first_scale_lane = 0 : i32, b_first_scale_lane = 0 : i32}
+        : vector<4xf8E8M0FNU>, vector<64xf8E4M3FN>,
+        vector<4xf8E8M0FNU>, vector<64xf8E4M3FN>, vector<8xf32>
+
+      // 32x16x128: fp4 inputs with different scale indices
+      %1 = amdgpu.scaled_wmma 32x16x128 (%scaleVecD * %matD) * (%scaleVecE * %matE) + %matF
+        {a_first_scale_lane = 0 : i32, b_first_scale_lane = 1 : i32}
+        : vector<8xf8E4M3FN>, vector<128xf4E2M1FN>,
+        vector<8xf8E4M3FN>, vector<64xf4E2M1FN>, vector<16xf32>
+    ```
+  }];
+  let assemblyFormat = [{
+    custom<MNKDimensionList>($m, $n, $k) ` `
+    `(` $scaleA `*` $sourceA `)` `*`
+    `(` $scaleB `*` $sourceB `)` `+` $destC
+    attr-dict
+    `:` type($scaleA) `,` type($sourceA) `,` type($scaleB) `,` type($sourceB) `,` type($destC)
+  }];
+  let hasVerifier = 1;
 }
 
 def AMDGPU_MakeDmaBaseOp :
