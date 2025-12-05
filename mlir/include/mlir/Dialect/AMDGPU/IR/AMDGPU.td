@@ -1257,8 +1257,8 @@ def AMDGPU_ScaledWMMAOp
     per-block scaling of inputs, supporting fp4, fp6, and fp8 data formats.
 
     The scale instructions support a block size of 16 or 32 and two tile sizes:
-    - 16x16x128 with mixed f8/f6/f4 formats (output: vector<4xf32>)
-    - 32x16x128 with f4 format only (output: vector<8xf32>)
+    - 16x16x128 with mixed f8/f6/f4 formats (output: vector<8xf32>)
+    - 32x16x128 with f4 format only (output: vector<16xf32>)
 
     Scale parameters (`scaleA`, `scaleB`) are small vectors of f8 scale values
     (either f8E8M0FNU, or f8E4M3FN) that are packed into i32/i64 values during

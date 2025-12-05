@@ -485,7 +485,7 @@ LogicalResult ScaledWMMAOp::verify() {
              << bLen;
   } else { // m == 32
     // For 32×16×128: only fp4 is supported, A is 128, B is 64.
-    if (!isF4(aElemType))
+    if (!isF4(aElemType) && !isF4(bElemType))
       return emitOpError("32x16x128 only supports fp4 element types");
 
     if (aLen != 128)
@@ -513,12 +513,12 @@ LogicalResult ScaledWMMAOp::verify() {
   if (isE8M0(scaleAElemType) && isE8M0(scaleBElemType))
     return success();
 
-  // Matrix A (F8|F6) x Matrix B (F4) with Scale A (E8M0), Scale B (E5M2|E4M3).
+  // Matrix A (F8|F6) x Matrix B (F4) with Scale A (E8M0), Scale B (E5M3|E4M3).
   if ((isF8(aElemType) || isF6(aElemType)) && isE8M0(scaleAElemType) &&
       isF4(bElemType) && isE4M3(scaleBElemType))
     return success();
 
-  // Matrix A (F4) x Matrix B (F8|F6) with Scale A (E5M2|E4M3), Scale B (E8M0).
+  // Matrix A (F4) x Matrix B (F8|F6) with Scale A (E5M3|E4M3), Scale B (E8M0).
   if (isF4(aElemType) && isE4M3(scaleAElemType) &&
       (isF8(bElemType) || isF6(bElemType)) && isE8M0(scaleBElemType))
     return success();
