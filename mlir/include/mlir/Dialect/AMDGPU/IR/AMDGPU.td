@@ -1285,17 +1285,6 @@ def AMDGPU_ScaledWMMAOp
     first_scale_lane of 0 or 16 will decide which lanes are used for this. When
     num_scales / scales_per_lane == 64 (num_lanes), then first_scale_lane must
     be set to 0.
-    
-    For tile size 16x16x128, each matrix gets 64 scales stored
-      16 lanes, with `a_first_scale_lane`/`b_first_scale_lane` selecting lanes
-      0-15 (index=0) or lanes 16-31 (index=16). For a tile size of 32x16x128,
-      matrix A gets 128 scales in a full VGPR (`a_first_scale_lane` is unused),
-      while matrix B gets 64 scales in half a VGPR.
-    - Block size 16: For a tile size of 16x16x128, each matrix gets
-      128 scales stored in half of two VGPRs, with `a_first_scale_lane`/`b_first_scale_lane`
-      selecting lanes 0-15 (index=0) or 16-31 (index=1) for each of the VGPRs.
-      For 32x16x128, matrix A gets 256 scales in two VGPRs (`a_first_scale_lane` is unused),
-      while matrix B gets 128 scales stored in half of two VGPRs.
 
     Example:
     ```mlir
