@@ -673,12 +673,12 @@ static Value packSmallFloatVectorOperand(ConversionPatternRewriter &rewriter,
 static Value castScaleOperand(ConversionPatternRewriter &rewriter, Location loc,
                               Value input) {
   return TypeSwitch<Type, Value>(input.getType())
-      .Case<IntegerType>([&](IntegerType) {
+      .Case([&](IntegerType) {
         // Handle scalar i8: zero extend to i32.
         return LLVM::ZExtOp::create(rewriter, loc, rewriter.getI32Type(),
                                     input);
       })
-      .Case<VectorType>([&](VectorType vectorType) {
+      .Case([&](VectorType vectorType) {
         // Handle vector<4xi8> -> i32 or vector<8xi8> -> i64.
         int64_t numElements = vectorType.getNumElements();
         assert((numElements == 4 || numElements == 8) &&
@@ -687,9 +687,7 @@ static Value castScaleOperand(ConversionPatternRewriter &rewriter, Location loc,
             (numElements == 4) ? rewriter.getI32Type() : rewriter.getI64Type();
         return LLVM::BitcastOp::create(rewriter, loc, outputType, input);
       })
-      .Default([](Type) -> Value {
-        llvm_unreachable("unexpected input type for scale operand");
-      });
+      .DefaultUnreachable("unexpected input type for scale operand");
 }
 
 /// Maps f8 scale element types to WMMA scale format codes.
